@@ -60,6 +60,12 @@ This is still the same dataset input. The archive path only changes the
 transport; the checked-in Drive inventory and source-sequence validator enforce
 the same 126-file contract.
 
+The default downloader does not rely on a single folder-list request. It uses
+the checked-in file inventory, tries Drive's public content endpoint first,
+falls back to pinned `gdown`, validates every byte size, and reuses already
+validated files after interruption. The ZIP path remains a manual escape hatch
+for account-wide or regional Drive outages.
+
 ## Local lifecycle automation
 
 `scripts/runpod_pipeline.sh` offers an optional local control plane around the

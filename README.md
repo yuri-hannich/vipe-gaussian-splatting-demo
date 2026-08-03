@@ -171,8 +171,9 @@ invalid.
 
 The checked-in `configs/dataset-files.tsv` contains the 126 public Drive file
 IDs, filenames, and expected sizes. Downloading files individually avoids
-Google Drive's folder-list limit; transfers are resumable and retried when
-Google temporarily throttles requests.
+Google Drive's folder-list limit. Each file first uses Drive's public content
+endpoint, falls back to pinned `gdown` through `uvx`, verifies the expected byte
+size, and retries without discarding already validated files.
 
 If Drive still rate-limits a clean run, download the provided folder as a ZIP
 through the Drive UI and run the same pipeline with a transport override:

@@ -23,6 +23,14 @@ UVX_EXE="$(uvx_executable)"
 download_file() {
   local file_id="$1"
   local output="$2"
+  local direct_url="https://drive.usercontent.google.com/download?id=${file_id}&export=download&confirm=t"
+  if curl --location --fail --silent --show-error \
+    --connect-timeout 20 --retry 2 --retry-all-errors --retry-delay 2 \
+    "${direct_url}" --output "${output}"; then
+    return 0
+  fi
+  rm -f "${output}"
+  log "Direct Drive transport failed; falling back to pinned gdown"
   "${UVX_EXE}" --from "gdown==${GDOWN_VERSION}" \
     gdown "${file_id}" --output "${output}" --quiet --continue
 }
@@ -45,17 +53,20 @@ while IFS=$'\t' read -r file_id filename expected_size; do
   success=false
   for attempt in 1 2 3 4 5; do
     if download_file "${file_id}" "${temporary}"; then
-      success=true
-      break
+      actual_size="$(wc -c < "${temporary}" | tr -d ' ')"
+      if [[ "${actual_size}" == "${expected_size}" ]]; then
+        success=true
+        break
+      fi
+      log "Size mismatch on attempt ${attempt}/5 for ${filename}: expected ${expected_size}, got ${actual_size}"
+      rm -f "${temporary}"
     fi
+    (( attempt < 5 )) || break
     delay=$((attempt * 15))
-    log "Google Drive throttled attempt ${attempt}/5 for ${filename}; retrying in ${delay}s"
+    log "Google Drive attempt ${attempt}/5 failed for ${filename}; retrying in ${delay}s"
     sleep "${delay}"
   done
   [[ "${success}" == true ]] || fail "Could not download ${filename} after 5 attempts"
-  actual_size="$(wc -c < "${temporary}" | tr -d ' ')"
-  [[ "${actual_size}" == "${expected_size}" ]] \
-    || fail "Size mismatch for ${filename}: expected ${expected_size}, got ${actual_size}"
   mv "${temporary}" "${target}"
   downloaded=$((downloaded + 1))
 done < "${FILE_MANIFEST}"
