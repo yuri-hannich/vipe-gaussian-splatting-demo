@@ -19,9 +19,10 @@ Validated smoke configuration and recommended minimums:
 
 - one NVIDIA GPU with 24 GB VRAM;
 - 20 GB container disk;
-- 50 GB network volume mounted at `/workspace`;
+- 50 GB persistent Pod volume mounted at `/workspace`;
 - public SSH enabled; and
-- non-interruptible Community Cloud for the short validation run.
+- Secure Cloud for the validated configuration (Community Cloud is also viable
+  when a healthy 24 GB GPU is available).
 
 The `/workspace` volume holds the repository, source dataset, pinned dependency
 checkouts, environments, checkpoints, and deliverables. Stop or delete it soon

@@ -10,7 +10,7 @@ PROFILE ?= quality
 
 RUN := PYTHONPATH=src $(PYTHON) -m vipe_demo
 
-.PHONY: help check download inspect prepare-smoke prepare-full local-smoke test gpu-preflight pipeline pipeline-dry-run
+.PHONY: help check download inspect prepare-smoke prepare-full local-smoke test verify gpu-preflight pipeline pipeline-dry-run
 
 help:
 	@echo "Usage: make <target>"
@@ -23,6 +23,7 @@ help:
 	@echo "  prepare-full   Build and validate the complete 1 FPS video"
 	@echo "  local-smoke    Run check, inspect, and prepare-smoke"
 	@echo "  test           Run the unit test suite"
+	@echo "  verify         Run syntax checks, tests, and a quality pipeline dry-run"
 	@echo ""
 	@echo "CUDA host"
 	@echo "  gpu-preflight  Require Linux and an accessible NVIDIA GPU"
@@ -62,6 +63,10 @@ local-smoke: check prepare-smoke test
 
 test:
 	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
+
+verify: test pipeline-dry-run
+	@for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit 1; done
+	@echo "Repository verification passed"
 
 gpu-preflight:
 	$(RUN) check --require-gpu

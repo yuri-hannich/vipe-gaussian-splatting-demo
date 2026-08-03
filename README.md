@@ -1,153 +1,191 @@
 # ViPE Gaussian Splatting Demo
 
-An end-to-end, reproducible pipeline for reconstructing a scene from an image
-sequence with NVIDIA ViPE and rendering a novel camera trajectory from a
-Gaussian Splatting model.
+An end-to-end reconstruction pipeline that turns the supplied ordered drone
+images into a validated Gaussian Splatting scene and a rendered camera-path
+video.
 
-## Status
+The repository owns the data validation, deterministic preprocessing, ViPE
+orchestration, COLMAP conversion checks, Splatfacto training, evaluation,
+export, rendering, and provenance report. NVIDIA
+[ViPE](https://github.com/nv-tlabs/vipe) and Nerfstudio
+[Splatfacto](https://docs.nerf.studio/nerfology/methods/splat.html) remain
+pin-verified external dependencies.
 
-The deterministic CPU-side pipeline is tested on Apple Silicon, and the full
-24-frame / 2,000-step smoke profile is validated end to end on a RunPod RTX
-4090. It produced ViPE/COLMAP geometry, evaluation metrics, an exported Gaussian
-PLY, a rendered H.264 demo, and a checksum-backed run report. The 126-frame
-quality run remains to be produced before final publication.
+## Assignment deliverables
 
-## Local quick start
+| Requirement | Produced evidence |
+| --- | --- |
+| Working ViPE setup | pinned CUDA environment, inference artifacts, and stage log |
+| Gaussian Splatting result | trained checkpoint and `artifacts/quality/splat/splat.ply` |
+| Public repository | this repository, including scripts, tests, and design rationale |
+| End-to-end demo | `artifacts/quality/demo.mp4` and checksum-backed run report |
 
-Prerequisites: Python 3.9+, FFmpeg, Make, and `uv` for the optional dataset
-download command.
+The source images and generated artifacts are intentionally excluded from Git.
+Final large artifacts are published separately as GitHub Release assets.
 
-```bash
-make check
-make download
-make local-smoke
-make test
-```
+## One-command reproduction
 
-`make local-smoke` validates and hashes the available source sequence, checks
-filename indices and one-second timestamp cadence, requires at least 24 frames,
-prepares the first 24 contiguous frames as a 1280-wide 1 FPS H.264 video, and
-validates the decoded artifact with FFprobe. `make inspect` is the stricter
-full-dataset gate and requires all 126 frames.
+Use a Linux machine with an NVIDIA GPU. The clean-room validation target is a
+RunPod Pod with:
 
-Generated data and manifests live under `data/` and are excluded from Git.
+- NVIDIA RTX 4090 or another CUDA GPU with at least 24 GB VRAM;
+- `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`;
+- 20 GB container disk;
+- at least 50 GB mounted at `/workspace`; and
+- public SSH enabled.
 
-If Google temporarily rate-limits `gdown`, download the folder as a ZIP in the
-Drive UI and extract the JPEG files into `data/raw/zavod70/`; `make inspect`
-will verify that the local copy is complete before it can be used.
-
-To prepare the complete 126-frame input at 1600 pixels wide:
+Clone the repository under the mounted volume and run:
 
 ```bash
-make prepare-full
-```
-
-The commands can be customized without editing source files:
-
-```bash
-make local-smoke DATASET_DIR=/path/to/images SMOKE_FRAMES=32 SMOKE_WIDTH=1600
-```
-
-## Planned pipeline
-
-1. Download and validate the provided image sequence.
-2. Estimate camera intrinsics, poses, masks, and depth with ViPE.
-3. Convert the ViPE artifacts to a Gaussian-Splatting-compatible dataset.
-4. Train the Gaussian representation.
-5. Render and encode a short novel-view trajectory.
-
-The final RunPod workflow will expose these stages through one reviewer-facing
-command:
-
-```bash
+git clone https://github.com/yuri-hannich/vipe-gaussian-splatting-demo.git
+cd vipe-gaussian-splatting-demo
 make pipeline
 ```
 
-The command will be resumable; lower-level targets will remain available for
-development and diagnosis.
-
-The source images are not redistributed by this repository. The checked-in
-`configs/dataset-files.tsv` contains only the public Drive IDs, filenames, and
-expected byte sizes needed to work around Google Drive's 50-file folder-list
-limit and to validate resumable downloads.
-
-## One-command CUDA pipeline
-
-On a Linux host with an NVIDIA GPU, FFmpeg, Git, a C++ compiler, Make, and
-`unzip`:
+`quality` is the default profile, so this is equivalent to:
 
 ```bash
-make pipeline PROFILE=smoke
 make pipeline PROFILE=quality
 ```
 
-`quality` is the default profile, so the final reviewer-facing command is:
+The command downloads both assignment inputs from their public sources,
+installs isolated pinned environments, validates every intermediate contract,
+trains the Gaussian model, evaluates it, exports the PLY, renders the demo, and
+writes the final report. No RunPod API key or other secret is required by the
+repository.
+
+Expect a cold run to download approximately 1.1 GB of source images and two
+intentional PyTorch/CUDA stacks. Keep the clone under `/workspace` so
+environments, dependency caches, checkpoints, and outputs use the mounted
+volume rather than the smaller container disk.
+
+## Smoke before quality
+
+For a new GPU type or modified dependency pin, first verify the same complete
+pipeline with the bounded profile:
 
 ```bash
-make pipeline
+make pipeline PROFILE=smoke
 ```
 
-Always run `smoke` first on a new host. It downloads/requires only the first 24
-contiguous frames and uses 2,000 Splatfacto steps to verify the complete
-integration. `quality` uses all 126 frames at
-1600x1200, the full ViPE depth-alignment pipeline, and 30,000 Splatfacto steps.
+| Profile | Frames | ViPE input | Splatfacto steps | Purpose |
+| --- | ---: | ---: | ---: | --- |
+| `smoke` | 24 | 1280x960 at 1 FPS | 2,000 | integration and CUDA gate |
+| `quality` | 126 | 1600x1200 at 1 FPS | 30,000 | assignment deliverables |
 
-Google Drive can temporarily throttle many public downloads. If that happens,
-download the assignment folder as one ZIP through the Drive UI, then keep the
-same pipeline command and supply the alternative form of the dataset input:
+The smoke profile has been validated end to end on an RTX 4090: all 24 cameras
+registered, the COLMAP export contained 54,599 points, and the exported PLY
+contained 320,109 finite Gaussians. Smoke metrics are an integration signal,
+not the final quality claim.
 
-```bash
-DATASET_ARCHIVE=/absolute/path/to/zavod70.zip make pipeline PROFILE=smoke
+## Pipeline
+
+```text
+public JPEG sequence
+        |
+        v
+download -> inspect -> deterministic 1 FPS MP4
+        |
+        v
+ViPE pose / depth / masks / SLAM map
+        |
+        v
+COLMAP export -> structural and geometry validation
+        |
+        v
+Splatfacto train -> evaluate -> export PLY -> render MP4
+        |
+        v
+checksum-backed run-report.json
 ```
 
-The ZIP must contain the 126 JPEG files at its root. Whether data comes from the
-public folder or a ZIP, the strict inspection stage enforces filenames, frame
-count, one-second cadence, dimensions, and hashes before CUDA work starts.
+Every stage writes a log and a fingerprinted completion record. Re-running the
+same command resumes outputs only when its command, relevant configuration,
+inputs, dependencies, and recorded output signatures still match.
 
-To inspect every resolved command without executing it:
+Inspect the resolved stage plan without executing it:
 
 ```bash
 make pipeline-dry-run PROFILE=quality
 ```
 
-Every completed stage has a fingerprint tied to its command, configuration,
-upstream revisions, inputs, and dependency-stage fingerprints. Re-running the
-same command resumes verified outputs; changed or missing artifacts invalidate
-the affected stage and everything downstream.
+## Outputs
 
-### Generated deliverables
+A successful quality run creates:
 
-A successful run creates ignored runtime artifacts under `runs/` and
-`artifacts/<profile>/`:
+```text
+runs/quality/
+  vipe/                         ViPE RGB, pose, depth, mask, and SLAM artifacts
+  colmap/zavod70/               validated cameras, images, and points3D
+  nerfstudio/                   config and checkpoints
+  logs/                         one log per pipeline stage
 
-- ViPE RGB, pose, intrinsics, depth, masks, and SLAM-map artifacts;
-- validated COLMAP text geometry and initialization points;
-- a Nerfstudio Splatfacto config and checkpoint;
-- held-out evaluation metrics and renders;
-- `splat/splat.ply`, the exported Gaussian representation;
-- `demo.mp4`, rendered along a conservative path near observed cameras; and
-- `run-report.json`, containing revisions, GPU/environment details, timings,
-  metrics, validation results, checksums, and Gaussian/video metadata.
+artifacts/quality/
+  evaluation/                   held-out comparison renders
+  metrics.json                  PSNR, SSIM, LPIPS, and throughput
+  splat/splat.ply               exported Gaussian representation
+  demo.mp4                      rendered observed-trajectory interpolation
+  run-report.json               revisions, host, timings, checksums, validation
+```
 
-Design rationale:
+The report is the machine-readable acceptance record: it fails to generate if
+the COLMAP geometry, PLY, metrics, or encoded video is missing or structurally
+invalid.
 
-- [Dataset preprocessing strategy](docs/data-preprocessing.md) explains the
-  1 FPS time base, resolution choice, color conversion, intrinsics consistency,
-  and validation gates.
-- [Pipeline architecture](docs/architecture.md) defines the macOS/CUDA boundary
-  and artifact contracts.
-- [Dependency management](docs/dependency-management.md) explains why ViPE and
-  Nerfstudio are pinned external dependencies rather than vendored forks.
-- [RunPod execution](docs/runpod.md) defines the tested host contract, storage
-  layout, smoke-first workflow, and cost-safety rules.
+## Dataset download fallback
 
-## Verified local result
+The checked-in `configs/dataset-files.tsv` contains the 126 public Drive file
+IDs, filenames, and expected sizes. Downloading files individually avoids
+Google Drive's folder-list limit; transfers are resumable and retried when
+Google temporarily throttles requests.
 
-Tested on an Apple M4 Pro running macOS 26.3.1 with Python 3.9.6 and FFmpeg
-8.1.1:
+If Drive still rate-limits a clean run, download the provided folder as a ZIP
+through the Drive UI and run the same pipeline with a transport override:
 
-- 126 source JPEGs validated at 4000x3000 pixels
-- continuous indices 0001-0126 and one-second filename cadence
-- complete H.264 input: 1600x1200, 1 FPS, 126 decoded frames, 126 seconds
-- `yuv420p` limited-range pixel format for broad Linux/CUDA compatibility
-- 130 MiB encoded video and SHA-256-backed manifests
+```bash
+DATASET_ARCHIVE=/workspace/input/zavod70.zip make pipeline
+```
+
+The ZIP must contain the assignment JPEGs. The same filename, count, cadence,
+dimension, and hash validation runs regardless of transport.
+
+## Local development
+
+CPU-side preprocessing and tests also run on macOS:
+
+```bash
+make check
+make download
+make local-smoke
+make verify
+```
+
+`make local-smoke` validates the image sequence and creates the 24-frame ViPE
+input without attempting CUDA inference. Apple MPS cannot replace the native
+CUDA extensions used by ViPE and gsplat, so reconstruction remains Linux +
+NVIDIA only.
+
+## Reproducibility
+
+- Exact upstream tags and commits live in `configs/versions.env`.
+- ViPE installs from its upstream frozen `uv.lock`.
+- Splatfacto uses an isolated Python 3.10 / PyTorch 2.1.2+cu118 environment.
+- Python packages are installed with `uv`; Conda is reserved for runtimes,
+  CUDA compiler/runtime headers, Ninja, and pinned GCC/G++.
+- Source checkouts and environments live under ignored `.cache/`; they are
+  installation dependencies, not vendored forks.
+- Source media, generated data, checkpoints, and artifacts are ignored.
+
+See:
+
+- [dataset preprocessing rationale](docs/data-preprocessing.md)
+- [pipeline architecture and contracts](docs/architecture.md)
+- [dependency and CUDA environment policy](docs/dependency-management.md)
+- [RunPod configuration and cost controls](docs/runpod.md)
+
+## License and upstream projects
+
+The original orchestration code in this repository is MIT licensed. ViPE,
+Nerfstudio, gsplat, PyTorch, and their transitive dependencies retain their own
+licenses. Review the pinned upstream repositories before redistributing their
+code or model artifacts.

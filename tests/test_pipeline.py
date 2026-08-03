@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from vipe_demo.config import load_profile
-from vipe_demo.pipeline import ROOT, build_stages, pipeline_environment
+from vipe_demo.pipeline import ROOT, _fingerprint, build_stages, pipeline_environment
 
 
 class PipelineTests(unittest.TestCase):
@@ -33,6 +33,21 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("--minimum-count", inspect.command)
         self.assertEqual(profile.frames, 24)
         self.assertEqual(profile.train_steps, 2000)
+
+    def test_version_change_only_invalidates_relevant_setup(self) -> None:
+        profile, profiles, versions = load_profile(ROOT, "quality")
+        stages = {stage.name: stage for stage in build_stages(profile, profiles)}
+        baseline = pipeline_environment(profile, profiles, versions)
+        changed = {**baseline, "SPLAT_NUMPY_VERSION": "999.0"}
+
+        bootstrap_before = _fingerprint(stages["bootstrap"], {}, baseline)
+        bootstrap_after = _fingerprint(stages["bootstrap"], {}, changed)
+        self.assertEqual(bootstrap_before, bootstrap_after)
+
+        dependencies = {name: "fixed" for name in stages["setup_splatfacto"].dependencies}
+        setup_before = _fingerprint(stages["setup_splatfacto"], dependencies, baseline)
+        setup_after = _fingerprint(stages["setup_splatfacto"], dependencies, changed)
+        self.assertNotEqual(setup_before, setup_after)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,58 @@ from vipe_demo.dataset import PipelineError, sha256_file
 
 ROOT = Path(__file__).resolve().parents[2]
 
+_STAGE_ENVIRONMENT_KEYS = {
+    "bootstrap": ("MINIFORGE_VERSION", "MINIFORGE_SHA256", "UV_VERSION"),
+    "preflight": (),
+    "download": (
+        "FRAME_COUNT",
+        "EXPECTED_FRAMES",
+        "DATASET_DIR",
+        "DATASET_ARCHIVE",
+        "GDOWN_VERSION",
+    ),
+    "inspect": (),
+    "prepare": (),
+    "setup_vipe": ("VIPE_REPOSITORY", "VIPE_TAG", "VIPE_COMMIT"),
+    "vipe_infer": (
+        "VIPE_TAG",
+        "FRAME_COUNT",
+        "SLAM_BUFFER",
+        "VIDEO_PATH",
+        "VIPE_OUTPUT_DIR",
+    ),
+    "export_colmap": ("SEQUENCE_NAME", "VIPE_OUTPUT_DIR", "COLMAP_ROOT"),
+    "validate_colmap": (),
+    "setup_splatfacto": (
+        "NERFSTUDIO_REPOSITORY",
+        "NERFSTUDIO_TAG",
+        "NERFSTUDIO_COMMIT",
+        "SPLAT_PYTHON_VERSION",
+        "SPLAT_TORCH_VERSION",
+        "SPLAT_TORCHVISION_VERSION",
+        "SPLAT_NUMPY_VERSION",
+        "SPLAT_SETUPTOOLS_VERSION",
+        "SPLAT_CUDA_VERSION",
+    ),
+    "train_splatfacto": (
+        "PROFILE",
+        "TRAIN_STEPS",
+        "EVAL_INTERVAL",
+        "COLMAP_ROOT",
+        "NS_OUTPUT_ROOT",
+        "NS_MODELS",
+    ),
+    "evaluate": ("NS_CONFIG", "METRICS_PATH", "EVAL_RENDER_DIR"),
+    "export_splat": ("NS_CONFIG", "SPLAT_PATH"),
+    "render": (
+        "NS_CONFIG",
+        "DEMO_PATH",
+        "RENDER_INTERPOLATION_STEPS",
+        "RENDER_FPS",
+    ),
+    "report": ("PROFILE",),
+}
+
 
 @dataclass(frozen=True)
 class Stage:
@@ -61,14 +113,20 @@ def _fingerprint(
     dependency_fingerprints: Mapping[str, str],
     stage_environment: Mapping[str, str],
 ) -> str:
+    try:
+        environment_keys = _STAGE_ENVIRONMENT_KEYS[stage.name]
+    except KeyError as error:
+        raise PipelineError(f"Fingerprint environment is undefined for {stage.name}") from error
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "name": stage.name,
         "command": list(stage.command),
         "dependencies": {
             name: dependency_fingerprints[name] for name in stage.dependencies
         },
-        "environment": dict(sorted(stage_environment.items())),
+        "environment": {
+            key: stage_environment[key] for key in sorted(environment_keys)
+        },
         "inputs": [_path_signature(path) for path in stage.inputs],
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -193,7 +251,6 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
     min_images = max(8, int(profile.frames * 0.75))
     download_inputs = [
         scripts / "download_dataset.sh",
-        ROOT / "configs" / "versions.env",
         ROOT / "configs" / "dataset-files.tsv",
     ]
     if os.environ.get("DATASET_ARCHIVE"):
@@ -225,7 +282,6 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
             [
                 scripts / "bootstrap_host.sh",
                 scripts / "lib" / "common.sh",
-                ROOT / "configs" / "versions.env",
             ],
             [
                 ROOT / ".cache" / "tools" / "conda-path",
@@ -278,7 +334,7 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
             "setup_vipe",
             ["bash", str(scripts / "setup_vipe.sh")],
             ["preflight", "bootstrap"],
-            [scripts / "setup_vipe.sh", scripts / "lib" / "common.sh", ROOT / "configs" / "versions.env"],
+            [scripts / "setup_vipe.sh", scripts / "lib" / "common.sh"],
             [
                 ROOT / ".cache" / "deps" / "vipe" / "run.py",
                 ROOT / ".cache" / "deps" / "vipe" / ".venv" / "bin" / "python",
@@ -323,7 +379,7 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
             "setup_splatfacto",
             ["bash", str(scripts / "setup_splatfacto.sh")],
             ["preflight", "bootstrap"],
-            [scripts / "setup_splatfacto.sh", scripts / "lib" / "common.sh", ROOT / "configs" / "versions.env"],
+            [scripts / "setup_splatfacto.sh", scripts / "lib" / "common.sh"],
             [
                 ROOT / ".cache" / "deps" / "nerfstudio" / "pyproject.toml",
                 ROOT / ".cache" / "envs" / "splatfacto" / "bin" / "ns-train",

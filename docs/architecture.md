@@ -30,7 +30,7 @@ held-out evaluation + camera-path render   Linux + NVIDIA CUDA
 ViPE and the selected Gaussian Splatting implementation compile and execute
 NVIDIA CUDA extensions. Apple MPS is not an ABI-compatible replacement. The
 local workflow therefore tests data contracts and deterministic preprocessing,
-while RunPod will execute the same prepared MP4 and the GPU-specific stages.
+while RunPod executes the same prepared MP4 and the GPU-specific stages.
 
 ## Local contract
 
@@ -50,17 +50,17 @@ See the detailed [dataset preprocessing strategy](data-preprocessing.md) and
 
 ## Target execution contract
 
-The final repository will expose one top-level command:
+The repository exposes one top-level command:
 
 ```bash
 make pipeline
 ```
 
-Its defaults will point to the two assignment inputs: the official pinned ViPE
+Its defaults point to the two assignment inputs: the official pinned ViPE
 source and the provided Google Drive dataset. Both values remain overridable for
 testing or future datasets without editing source code.
 
-The umbrella command will execute and validate these stages:
+The umbrella command executes and validates these stages:
 
 ```text
 preflight -> download -> inspect -> prepare -> setup ViPE -> infer
@@ -68,8 +68,8 @@ preflight -> download -> inspect -> prepare -> setup ViPE -> infer
           -> train -> evaluate -> export PLY -> render -> report
 ```
 
-Individual stage targets remain available for debugging, but a reviewer should
-not need to assemble them manually. Completed stages will be resumable and tied
+Individual stages remain available in the CLI for debugging, but a reviewer
+does not need to assemble them manually. Completed stages are resumable and tied
 to input/configuration fingerprints so an interrupted RunPod session does not
 silently reuse stale artifacts.
 
@@ -83,5 +83,5 @@ the other three:
 2. a trained Gaussian Splatting checkpoint and exported `.ply` scene; and
 3. a rendered demo video following a validated camera trajectory.
 
-The final run report will record revisions, environment versions, GPU details,
+The final run report records revisions, environment versions, GPU details,
 stage timings, validation results, metrics, and artifact checksums.
