@@ -17,7 +17,10 @@ class ConfigTests(unittest.TestCase):
             if line and not line.startswith("#")
         ]
         self.assertEqual(len(rows), 126)
+        self.assertTrue(all(len(row) == 4 for row in rows))
         self.assertEqual(len({row[0] for row in rows}), 126)
+        self.assertEqual(len({row[3] for row in rows}), 126)
+        self.assertTrue(all(len(row[3]) == 64 for row in rows))
         self.assertEqual(rows[0][1], "dji_20250111171148_0001_v.jpg")
         self.assertEqual(rows[-1][1], "dji_20250111171353_0126_v.jpg")
         self.assertEqual(sum(int(row[2]) for row in rows), 1_074_302_976)

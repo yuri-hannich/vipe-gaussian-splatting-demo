@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 from typing import Optional, Sequence
 
-from vipe_demo.dataset import PipelineError, inspect_frames, write_dataset_manifest
+from vipe_demo.dataset import (
+    PipelineError,
+    inspect_frames,
+    validate_frame_inventory,
+    write_dataset_manifest,
+)
 from vipe_demo.colmap import validate_colmap
 from vipe_demo.environment import check_environment, format_report
 from vipe_demo.pipeline import run_pipeline
@@ -29,6 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     count.add_argument("--expected-count", type=int)
     count.add_argument("--minimum-count", type=int)
     inspect.add_argument("--skip-hash", action="store_true")
+    inspect.add_argument("--inventory", type=Path)
 
     prepare = commands.add_parser("prepare", help="Create and validate a ViPE MP4")
     prepare.add_argument("--input", type=Path, required=True)
@@ -39,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
     prepare.add_argument("--max-frames", type=int)
     prepare.add_argument("--start-offset", type=int, default=0)
     prepare.add_argument("--skip-hash", action="store_true")
+    prepare.add_argument("--inventory", type=Path)
 
     colmap = commands.add_parser("validate-colmap", help="Validate ViPE's COLMAP export")
     colmap.add_argument("--input", type=Path, required=True)
@@ -93,6 +100,8 @@ def _run(args: argparse.Namespace) -> None:
         return
 
     frames = inspect_frames(args.input, hash_files=not args.skip_hash)
+    if args.inventory is not None:
+        validate_frame_inventory(frames, args.inventory)
     if args.command == "inspect":
         if args.expected_count is not None and len(frames) != args.expected_count:
             raise PipelineError(

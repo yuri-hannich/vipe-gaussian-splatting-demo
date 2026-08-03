@@ -91,9 +91,21 @@ remaining_training_steps() {
   [[ "${target_steps}" =~ ^[0-9]+$ ]] || fail "Invalid target step count: ${target_steps}"
   [[ "${checkpoint_steps}" =~ ^[0-9]+$ ]] || fail "Invalid checkpoint step count: ${checkpoint_steps}"
 
-  if (( checkpoint_steps >= target_steps )); then
+  local completed_iterations=$((checkpoint_steps + 1))
+  if (( completed_iterations >= target_steps )); then
     printf '0\n'
   else
-    printf '%d\n' "$((target_steps - checkpoint_steps))"
+    printf '%d\n' "$((target_steps - completed_iterations))"
+  fi
+}
+
+file_sha256() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${path}" | awk '{print $1}'
+  else
+    fail "Neither sha256sum nor shasum is available"
   fi
 }

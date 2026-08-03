@@ -22,7 +22,7 @@ pin-verified external dependencies.
 
 The source images and generated artifacts are intentionally excluded from Git.
 Final large artifacts are published separately in the
-[quality-v1 GitHub Release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1).
+[quality-v2 GitHub Release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v2).
 
 ## One-command reproduction
 
@@ -83,7 +83,7 @@ make runpod
 2. shows the profile, GPU, storage, balance, and safety deadlines;
 3. creates a fresh Pod without sending the account API key into it;
 4. clones and checks out the exact local commit from GitHub;
-5. runs the same `make pipeline` command documented above;
+5. starts the same `make pipeline` command as a reconnectable remote job;
 6. downloads artifacts, logs, and stage records into the local clone;
 7. validates PLY/video hashes and metadata against `run-report.json`; and
 8. deletes the successful Pod and its Pod volume unless configured otherwise.
@@ -116,27 +116,18 @@ not the final quality claim.
 
 ## Validated quality result
 
-The full 126-frame profile was validated on an RTX 4090. The downloadable
-[release artifacts](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1)
-are the exact outputs summarized by the included checksum-backed report.
+The full 126-frame profile is validated from a clean RTX 4090 Pod at the exact
+tagged revision. The downloadable
+[quality-v2 release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v2)
+contains the PLY, video, metrics, and schema-v2 run report from that one-command
+run. The report is the source of truth for exact metrics, revisions, stage
+timings, media metadata, and SHA-256 digests.
 
-| Result | Value |
-| --- | ---: |
-| Registered cameras | 126 / 126 |
-| ViPE/COLMAP points | 319,311 |
-| Evaluated checkpoint | 32,000 steps |
-| Exported finite Gaussians | 5,943,740 |
-| PSNR | 16.795 |
-| SSIM | 0.3859 |
-| LPIPS | 0.4178 |
-| Demo | 218 frames, 1600x1200 H.264, 9.17 s |
-
-The configured quality target is 30,000 total steps. This recovery run was
-interrupted near the target and its latest save-boundary checkpoint reached
-32,000 before evaluation. The resume implementation now subtracts the loaded
-checkpoint step from the total target and treats a checkpoint at or above the
-target as complete, preventing a resumed invocation from training another full
-30,000 steps.
+The quality contract is all 126 registered cameras, a 1600x1200 ViPE/COLMAP
+scene, 30,000 total Splatfacto iterations, interval-held-out evaluation, a
+schema-validated binary Gaussian PLY, and a 218-frame H.264 trajectory render.
+Nerfstudio checkpoint filenames contain the zero-based last completed step, so
+resume subtracts `checkpoint_step + 1` from the iteration target.
 
 Visual inspection shows stable camera motion, coherent building/terrain
 geometry, and strong view agreement. Thin leafless branches and vegetation
@@ -196,17 +187,19 @@ artifacts/quality/
   run-report.json               revisions, host, timings, checksums, validation
 ```
 
-The report is the machine-readable acceptance record: it fails to generate if
-the COLMAP geometry, PLY, metrics, or encoded video is missing or structurally
-invalid.
+The report is the machine-readable acceptance record. It requires every
+preceding stage record, finite typed evaluation metrics, the exact Splatfacto
+PLY schema and payload length, the configured video profile, and SHA-256/size
+metadata for the PLY, metrics, and video. The report stage writes its own stage
+record immediately after taking this pre-report provenance snapshot.
 
 ## Dataset download fallback
 
 The checked-in `configs/dataset-files.tsv` contains the 126 public Drive file
-IDs, filenames, and expected sizes. Downloading files individually avoids
+IDs, filenames, expected sizes, and golden SHA-256 digests. Downloading files individually avoids
 Google Drive's folder-list limit. Each file first uses Drive's public content
-endpoint, falls back to pinned `gdown` through `uvx`, verifies the expected byte
-size, and retries without discarding already validated files.
+endpoint, falls back to pinned `gdown` through `uvx`, verifies both size and
+digest, and retries without discarding already validated files.
 
 If Drive still rate-limits a clean run, download the provided folder as a ZIP
 through the Drive UI and run the same pipeline with a transport override:
@@ -229,8 +222,9 @@ make local-smoke
 make verify
 ```
 
-`make local-smoke` validates the image sequence and creates the 24-frame ViPE
-input without attempting CUDA inference. Apple MPS cannot replace the native
+`make local-smoke` validates the available contiguous sequence and creates the
+bounded 24-frame ViPE input without attempting CUDA inference. Run `make
+inspect` for the strict 126-frame assignment gate. Apple MPS cannot replace the native
 CUDA extensions used by ViPE and gsplat, so reconstruction remains Linux +
 NVIDIA only.
 

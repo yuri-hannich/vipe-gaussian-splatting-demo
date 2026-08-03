@@ -21,7 +21,7 @@ help:
 	@echo "  inspect        Validate all source images and write a manifest"
 	@echo "  prepare-smoke  Build and validate a short contiguous 1 FPS video"
 	@echo "  prepare-full   Build and validate the complete 1 FPS video"
-	@echo "  local-smoke    Run check, inspect, and prepare-smoke"
+	@echo "  local-smoke    Run bounded preprocessing and unit tests"
 	@echo "  test           Run the unit test suite"
 	@echo "  verify         Run syntax checks, tests, and a quality pipeline dry-run"
 	@echo ""
@@ -42,6 +42,7 @@ inspect:
 	$(RUN) inspect \
 		--input "$(DATASET_DIR)" \
 		--manifest "$(MANIFEST_DIR)/source.json" \
+		--inventory "configs/dataset-files.tsv" \
 		--expected-count 126
 
 prepare-smoke:
@@ -49,6 +50,7 @@ prepare-smoke:
 		--input "$(DATASET_DIR)" \
 		--output "$(INTERIM_DIR)/smoke/zavod70-smoke.mp4" \
 		--manifest "$(MANIFEST_DIR)/smoke-video.json" \
+		--inventory "configs/dataset-files.tsv" \
 		--max-frames "$(SMOKE_FRAMES)" \
 		--width "$(SMOKE_WIDTH)" \
 		--fps "$(FPS)"
@@ -58,6 +60,7 @@ prepare-full:
 		--input "$(DATASET_DIR)" \
 		--output "$(INTERIM_DIR)/full/zavod70.mp4" \
 		--manifest "$(MANIFEST_DIR)/full-video.json" \
+		--inventory "configs/dataset-files.tsv" \
 		--width "$(FULL_WIDTH)" \
 		--fps "$(FPS)"
 

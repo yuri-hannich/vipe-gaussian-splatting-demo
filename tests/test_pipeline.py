@@ -64,7 +64,9 @@ class PipelineTests(unittest.TestCase):
         self.assertNotEqual(setup_before, setup_after)
 
     def test_resume_counts_steps_toward_total_target(self) -> None:
-        self.assertEqual(self._common_shell("remaining_training_steps 30000 20000"), "10000")
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 0"), "29999")
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 20000"), "9999")
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 29999"), "0")
         self.assertEqual(self._common_shell("remaining_training_steps 30000 30000"), "0")
         self.assertEqual(self._common_shell("remaining_training_steps 30000 32000"), "0")
 

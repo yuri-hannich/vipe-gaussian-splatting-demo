@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Union
 
-from vipe_demo.config import Profile, load_profile, positive_int, required
+from vipe_demo.config import Profile, load_profile, required
 from vipe_demo.dataset import PipelineError, sha256_file
 
 
@@ -266,6 +266,8 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
         str(paths["video"]),
         "--manifest",
         str(paths["video_manifest"]),
+        "--inventory",
+        str(ROOT / "configs" / "dataset-files.tsv"),
         "--width",
         str(profile.width),
         "--fps",
@@ -313,11 +315,17 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
                 str(paths["dataset"]),
                 "--manifest",
                 str(paths["source_manifest"]),
+                "--inventory",
+                str(ROOT / "configs" / "dataset-files.tsv"),
                 "--minimum-count" if profile.name == "smoke" else "--expected-count",
                 str(profile.frames),
             ],
             ["download"],
-            [paths["dataset"], ROOT / "src" / "vipe_demo" / "dataset.py"],  # type: ignore[list-item]
+            [
+                paths["dataset"],
+                ROOT / "src" / "vipe_demo" / "dataset.py",
+                ROOT / "configs" / "dataset-files.tsv",
+            ],  # type: ignore[list-item]
             [paths["source_manifest"]],  # type: ignore[list-item]
         ),
         Stage(
@@ -327,6 +335,7 @@ def build_stages(profile: Profile, profiles: Mapping[str, str]) -> List[Stage]:
             [
                 paths["source_manifest"],  # type: ignore[list-item]
                 ROOT / "src" / "vipe_demo" / "video.py",
+                ROOT / "configs" / "dataset-files.tsv",
             ],
             [paths["video"], paths["video_manifest"]],  # type: ignore[list-item]
         ),

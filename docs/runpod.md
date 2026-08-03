@@ -62,7 +62,7 @@ the same 126-file contract.
 
 The default downloader does not rely on a single folder-list request. It uses
 the checked-in file inventory, tries Drive's public content endpoint first,
-falls back to pinned `gdown`, validates every byte size, and reuses already
+falls back to pinned `gdown`, validates every byte size and golden SHA-256, and reuses already
 validated files after interruption. The ZIP path remains a manual escape hatch
 for account-wide or regional Drive outages.
 
@@ -84,9 +84,12 @@ the exact pushed Git revision, so a cloud run cannot silently include local
 uncommitted files.
 
 The launcher places both a stop deadline and a later termination deadline on
-the resource. An unsuccessful run stops and retains the Pod for diagnosis by
-default. A successful run downloads and independently verifies the reported
-artifacts before deleting the Pod and its attached Pod volume. The ignored
+the resource. The pipeline itself runs under `nohup` with a remote status file,
+so an SSH or client-network interruption does not terminate training; the
+launcher reconnects and polls. An unsuccessful run stops and retains the Pod
+for diagnosis by default. A successful run downloads and independently verifies the reported
+artifacts before retrying deletion and confirming that the Pod no longer
+exists. The ignored
 `.runpod/active.env` records the Pod ID when manual recovery is required.
 
 ## Cost safety
@@ -147,20 +150,10 @@ resumable and reuses the persistent caches.
 
 ## Quality validation result
 
-The complete 126-frame profile was also validated on an RTX 4090:
-
-- ViPE registered all 126 frames and the COLMAP gate accepted 319,311 points;
-- the evaluated recovery checkpoint produced PSNR 16.795, SSIM 0.3859, and
-  LPIPS 0.4178 on the interval holdout split;
-- the exported 1.47 GB PLY contains 5,943,740 finite Gaussians; and
-- the demo contains 218 H.264 frames at 1600x1200 over 9.17 seconds.
-
-The quality profile targets 30,000 total Splatfacto steps. The validated run
-was interrupted and reached a 32,000-step save boundary during recovery before
-evaluation. The current train wrapper computes `target - checkpoint_step` on
-resume and exits successfully when the latest checkpoint is already at or past
-the target. This avoids interpreting `--max-num-iterations` as another complete
-training budget after `--load-dir`.
-
-The exact PLY, video, metrics, and report are published in the
-[quality-v1 release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1).
+The final 126-frame clean-room result is published in the
+[quality-v2 release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v2).
+Its schema-v2 report records the exact repository revision, all 14 successful
+stages preceding report generation, metrics, PLY structure, video profile, and
+artifact digests. The release report and notes are authoritative for the
+measured values rather than duplicating mutable numbers in this operations
+guide.

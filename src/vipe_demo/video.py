@@ -29,7 +29,7 @@ def probe_video(path: Path) -> dict:
         "-select_streams",
         "v:0",
         "-show_entries",
-        "stream=codec_name,width,height,pix_fmt,r_frame_rate,avg_frame_rate,nb_read_frames",
+        "stream=codec_name,width,height,pix_fmt,color_range,r_frame_rate,avg_frame_rate,nb_read_frames",
         "-show_entries",
         "format=duration,size",
         "-of",
@@ -44,7 +44,9 @@ def probe_video(path: Path) -> dict:
     return {"stream": streams[0], "format": payload.get("format", {})}
 
 
-def validate_video(path: Path, *, expected_frames: int, expected_fps: int) -> dict:
+def validate_video(
+    path: Path, *, expected_frames: int, expected_fps: int, expected_width: int
+) -> dict:
     if not path.is_file():
         raise PipelineError(f"Video does not exist: {path}")
     probe = probe_video(path)
@@ -54,6 +56,9 @@ def validate_video(path: Path, *, expected_frames: int, expected_fps: int) -> di
     width = int(stream.get("width", 0))
     height = int(stream.get("height", 0))
     pix_fmt = stream.get("pix_fmt")
+    color_range = stream.get("color_range")
+    codec = stream.get("codec_name")
+    duration = float(probe["format"].get("duration", 0))
 
     if frame_count != expected_frames:
         raise PipelineError(
@@ -61,10 +66,21 @@ def validate_video(path: Path, *, expected_frames: int, expected_fps: int) -> di
         )
     if fps != expected_fps:
         raise PipelineError(f"Expected {expected_fps} FPS, found {fps}: {path}")
+    if codec != "h264":
+        raise PipelineError(f"Expected H.264, found {codec}: {path}")
+    if width != expected_width:
+        raise PipelineError(f"Expected width {expected_width}, found {width}: {path}")
     if width <= 0 or height <= 0 or width % 2 or height % 2:
         raise PipelineError(f"Video dimensions must be positive and even: {width}x{height}")
     if pix_fmt != "yuv420p":
         raise PipelineError(f"Expected yuv420p, found {pix_fmt}: {path}")
+    if color_range != "tv":
+        raise PipelineError(f"Expected limited/tv color range, found {color_range}: {path}")
+    expected_duration = expected_frames / expected_fps
+    if duration <= 0 or abs(duration - expected_duration) > 1 / expected_fps:
+        raise PipelineError(
+            f"Expected duration near {expected_duration:.6f}s, found {duration:.6f}s: {path}"
+        )
     return probe
 
 
@@ -146,7 +162,10 @@ def prepare_video(
             raise PipelineError(f"FFmpeg failed with exit code {error.returncode}") from error
 
     probe = validate_video(
-        temporary_output, expected_frames=len(selected), expected_fps=fps
+        temporary_output,
+        expected_frames=len(selected),
+        expected_fps=fps,
+        expected_width=width,
     )
     temporary_output.replace(output_path)
     payload = {

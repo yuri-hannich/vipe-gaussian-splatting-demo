@@ -46,12 +46,62 @@ class Frame:
     sha256: Optional[str]
 
 
+@dataclass(frozen=True)
+class InventoryEntry:
+    file_id: str
+    name: str
+    size_bytes: int
+    sha256: str
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def load_inventory(path: Path) -> dict[str, InventoryEntry]:
+    if not path.is_file():
+        raise PipelineError(f"Dataset inventory does not exist: {path}")
+    entries = {}
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 4:
+            raise PipelineError(f"Invalid dataset inventory row at {path}:{line_number}")
+        file_id, name, raw_size, sha256 = parts
+        try:
+            size_bytes = int(raw_size)
+        except ValueError as error:
+            raise PipelineError(f"Invalid inventory size at {path}:{line_number}") from error
+        if size_bytes <= 0 or not re.fullmatch(r"[0-9a-f]{64}", sha256):
+            raise PipelineError(f"Invalid inventory integrity data at {path}:{line_number}")
+        if name in entries:
+            raise PipelineError(f"Duplicate inventory filename: {name}")
+        entries[name] = InventoryEntry(file_id, name, size_bytes, sha256)
+    if not entries:
+        raise PipelineError(f"Dataset inventory is empty: {path}")
+    return entries
+
+
+def validate_frame_inventory(frames: Sequence[Frame], inventory_path: Path) -> None:
+    entries = load_inventory(inventory_path)
+    for frame in frames:
+        expected = entries.get(frame.name)
+        if expected is None:
+            raise PipelineError(f"Frame is not present in the trusted inventory: {frame.name}")
+        if frame.sha256 is None:
+            raise PipelineError("Trusted inventory validation requires frame SHA-256 hashes")
+        if (frame.size_bytes, frame.sha256) != (expected.size_bytes, expected.sha256):
+            raise PipelineError(
+                f"Frame integrity mismatch for {frame.name}: expected "
+                f"{expected.size_bytes}/{expected.sha256}, found "
+                f"{frame.size_bytes}/{frame.sha256}"
+            )
 
 
 def jpeg_dimensions(path: Path) -> Tuple[int, int]:

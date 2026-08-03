@@ -5,7 +5,12 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from vipe_demo.dataset import PipelineError, inspect_frames, jpeg_dimensions
+from vipe_demo.dataset import (
+    PipelineError,
+    inspect_frames,
+    jpeg_dimensions,
+    validate_frame_inventory,
+)
 
 
 def minimal_jpeg(width: int, height: int) -> bytes:
@@ -41,6 +46,23 @@ class DatasetTests(unittest.TestCase):
             (root / "dji_20250111171150_0003_v.jpg").write_bytes(minimal_jpeg(4, 2))
             with self.assertRaisesRegex(PipelineError, "not contiguous"):
                 inspect_frames(root, hash_files=False)
+
+    def test_validates_frames_against_trusted_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            frame = root / "dji_20250111171148_0001_v.jpg"
+            frame.write_bytes(minimal_jpeg(4, 2))
+            frames = inspect_frames(root)
+            inventory = root / "inventory.tsv"
+            inventory.write_text(
+                f"file-id\t{frame.name}\t{frame.stat().st_size}\t{frames[0].sha256}\n"
+            )
+            validate_frame_inventory(frames, inventory)
+            inventory.write_text(
+                f"file-id\t{frame.name}\t{frame.stat().st_size}\t{'0' * 64}\n"
+            )
+            with self.assertRaisesRegex(PipelineError, "integrity mismatch"):
+                validate_frame_inventory(frames, inventory)
 
 
 if __name__ == "__main__":

@@ -89,7 +89,7 @@ checks:
 - one-second timestamp cadence
 - identical image dimensions
 - expected full-dataset count of 126
-- per-file sizes and SHA-256 hashes
+- per-file sizes and SHA-256 hashes matched against the tracked golden inventory
 - decoded MP4 frame count
 - exact average frame rate
 - even output dimensions

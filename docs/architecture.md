@@ -34,9 +34,10 @@ while RunPod executes the same prepared MP4 and the GPU-specific stages.
 
 ## Local contract
 
-`make local-smoke` must fail early if the sequence, timestamps, image sizes,
-FFmpeg encode, decoded frame count, frame rate, pixel format, or output size is
-wrong. A successful local smoke run is the handoff condition for GPU work.
+`make local-smoke` must fail early if its available bounded sequence,
+timestamps, image sizes, FFmpeg encode, decoded frame count, frame rate, pixel
+format, or output size is wrong. `make inspect` is the separate strict
+126-frame assignment gate. Both must pass before a quality GPU run.
 
 ## Source and dependency boundaries
 
@@ -75,7 +76,8 @@ silently reuse stale artifacts.
 
 For Splatfacto specifically, the profile's step count is a total target. When a
 checkpoint exists, the wrapper parses its saved step and runs only the positive
-remainder; a checkpoint at or beyond the target makes the train stage a no-op.
+remainder after counting that zero-based step as completed; a checkpoint at
+`target - 1` or beyond makes the train stage a no-op.
 This is necessary because Nerfstudio interprets `--max-num-iterations` as work
 for the resumed invocation rather than an absolute final step.
 
@@ -90,4 +92,6 @@ the other three:
 3. a rendered demo video following a validated camera trajectory.
 
 The final run report records revisions, environment versions, GPU details,
-stage timings, validation results, metrics, and artifact checksums.
+all successful pre-report stage timings, validation results, metrics, and
+artifact checksums. The report stage completion record is written immediately
+after the report snapshot, avoiding a self-referential checksum.
