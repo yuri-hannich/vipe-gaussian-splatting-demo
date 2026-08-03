@@ -10,7 +10,7 @@ PROFILE ?= quality
 
 RUN := PYTHONPATH=src $(PYTHON) -m vipe_demo
 
-.PHONY: help check download inspect prepare-smoke prepare-full local-smoke test verify gpu-preflight pipeline pipeline-dry-run
+.PHONY: help check download inspect prepare-smoke prepare-full local-smoke test verify gpu-preflight pipeline pipeline-dry-run runpod runpod-dry-run
 
 help:
 	@echo "Usage: make <target>"
@@ -29,6 +29,8 @@ help:
 	@echo "  gpu-preflight  Require Linux and an accessible NVIDIA GPU"
 	@echo "  pipeline       Run the complete resumable pipeline (PROFILE=quality)"
 	@echo "  pipeline-dry-run  Print all stages without executing them"
+	@echo "  runpod         Provision RunPod locally, run the pipeline, fetch artifacts"
+	@echo "  runpod-dry-run Validate local RunPod configuration without provisioning"
 
 check:
 	$(RUN) check
@@ -66,6 +68,7 @@ test:
 
 verify: test pipeline-dry-run
 	@for script in scripts/*.sh scripts/lib/*.sh; do bash -n "$$script" || exit 1; done
+	@bash -n .env.runpod.example
 	@echo "Repository verification passed"
 
 gpu-preflight:
@@ -76,3 +79,9 @@ pipeline:
 
 pipeline-dry-run:
 	DATASET_DIR="$(abspath $(DATASET_DIR))" $(RUN) pipeline --profile "$(PROFILE)" --dry-run
+
+runpod:
+	PROFILE="$(PROFILE)" bash scripts/runpod_pipeline.sh
+
+runpod-dry-run:
+	PROFILE="$(PROFILE)" RUNPOD_DRY_RUN=true bash scripts/runpod_pipeline.sh

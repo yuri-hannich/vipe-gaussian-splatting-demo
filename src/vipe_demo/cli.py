@@ -9,7 +9,7 @@ from vipe_demo.dataset import PipelineError, inspect_frames, write_dataset_manif
 from vipe_demo.colmap import validate_colmap
 from vipe_demo.environment import check_environment, format_report
 from vipe_demo.pipeline import run_pipeline
-from vipe_demo.report import create_report
+from vipe_demo.report import create_report, verify_artifacts
 from vipe_demo.video import prepare_video
 
 
@@ -51,6 +51,11 @@ def _parser() -> argparse.ArgumentParser:
 
     report = commands.add_parser("report", help="Validate deliverables and write a run report")
     report.add_argument("--profile", choices=("smoke", "quality"), required=True)
+
+    verify = commands.add_parser(
+        "verify-artifacts", help="Verify copied artifacts against a GPU run report"
+    )
+    verify.add_argument("--profile", choices=("smoke", "quality"), required=True)
     return parser
 
 
@@ -72,6 +77,14 @@ def _run(args: argparse.Namespace) -> None:
         print(
             f"Validated {report['artifacts']['splat']['gaussians']} Gaussians and "
             f"{report['artifacts']['demo']['decoded_frames']} demo frames"
+        )
+        return
+
+    if args.command == "verify-artifacts":
+        report = verify_artifacts(args.profile)
+        print(
+            f"Verified {report['gaussians']} Gaussians and "
+            f"{report['demo_frames']} copied demo frames for {report['profile']}"
         )
         return
 

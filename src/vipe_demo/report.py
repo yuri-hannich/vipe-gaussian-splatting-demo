@@ -148,3 +148,77 @@ def create_report(profile_name: str) -> dict:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return payload
+
+
+def _reported_artifact(root: Path, entry: Mapping[str, object], label: str) -> Path:
+    relative = entry.get("path")
+    if not isinstance(relative, str):
+        raise PipelineError(f"Run report has no path for {label}")
+    path = (root / relative).resolve()
+    try:
+        path.relative_to(root.resolve())
+    except ValueError as error:
+        raise PipelineError(f"Run report path escapes the repository: {relative}") from error
+    if not path.is_file():
+        raise PipelineError(f"Missing reported {label}: {path}")
+    return path
+
+
+def verify_artifacts(profile_name: str) -> dict:
+    """Verify copied deliverables against the report produced on the GPU host."""
+    profile, profiles, versions = load_profile(ROOT, profile_name)
+    environment = pipeline_environment(profile, profiles, versions)
+    report_path = Path(environment["REPORT_PATH"])
+    if not report_path.is_file():
+        raise PipelineError(f"Missing run report: {report_path}")
+    try:
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise PipelineError(f"Invalid run report: {report_path}") from error
+    if payload.get("profile") != profile.name:
+        raise PipelineError(
+            f"Expected {profile.name} report, found {payload.get('profile')!r}"
+        )
+
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise PipelineError("Run report has no artifacts object")
+    splat_entry = artifacts.get("splat")
+    demo_entry = artifacts.get("demo")
+    if not isinstance(splat_entry, dict) or not isinstance(demo_entry, dict):
+        raise PipelineError("Run report is missing splat or demo metadata")
+
+    splat_path = _reported_artifact(ROOT, splat_entry, "Gaussian splat")
+    demo_path = _reported_artifact(ROOT, demo_entry, "demo video")
+    for path, entry, label in (
+        (splat_path, splat_entry, "Gaussian splat"),
+        (demo_path, demo_entry, "demo video"),
+    ):
+        if path.stat().st_size != entry.get("bytes"):
+            raise PipelineError(f"Reported byte size does not match {label}: {path}")
+        if sha256_file(path) != entry.get("sha256"):
+            raise PipelineError(f"Reported SHA-256 does not match {label}: {path}")
+
+    gaussians = _ply_vertices(splat_path)
+    if gaussians != splat_entry.get("gaussians"):
+        raise PipelineError("Reported Gaussian count does not match the PLY header")
+    probe = probe_video(demo_path)
+    stream = probe["stream"]
+    frames = int(stream.get("nb_read_frames", 0))
+    expected_video = {
+        "codec": stream.get("codec_name"),
+        "width": int(stream.get("width", 0)),
+        "height": int(stream.get("height", 0)),
+        "decoded_frames": frames,
+    }
+    for key, actual in expected_video.items():
+        if demo_entry.get(key) != actual:
+            raise PipelineError(f"Reported demo {key} does not match the copied video")
+    if frames <= 0:
+        raise PipelineError("Copied demo contains no decodable frames")
+    return {
+        "profile": profile.name,
+        "repository_revision": payload.get("repository_revision"),
+        "gaussians": gaussians,
+        "demo_frames": frames,
+    }

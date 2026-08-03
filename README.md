@@ -59,6 +59,41 @@ intentional PyTorch/CUDA stacks. Keep the clone under `/workspace` so
 environments, dependency caches, checkpoints, and outputs use the mounted
 volume rather than the smaller container disk.
 
+## Optional: launch RunPod from your local machine
+
+The manual GPU-host path above is provider-independent. As a convenience, this
+repository can also manage the complete RunPod lifecycle from macOS or Linux
+and return the deliverables to the local clone.
+
+Install the official [RunPod CLI](https://docs.runpod.io/runpodctl/overview) and
+run `runpodctl doctor` once so the account has a usable SSH key. Then:
+
+```bash
+cp .env.runpod.example .env.runpod
+# Add RUNPOD_API_KEY to the private .env.runpod file.
+
+make runpod-dry-run
+make runpod
+```
+
+`make runpod` performs a clean-room run:
+
+1. requires a clean commit already pushed to the public origin;
+2. shows the profile, GPU, storage, balance, and safety deadlines;
+3. creates a fresh Pod without sending the account API key into it;
+4. clones and checks out the exact local commit from GitHub;
+5. runs the same `make pipeline` command documented above;
+6. downloads artifacts, logs, and stage records into the local clone;
+7. validates PLY/video hashes and metadata against `run-report.json`; and
+8. deletes the successful Pod and its Pod volume unless configured otherwise.
+
+The launcher installs no Python packages locally. It requires Bash, Git,
+Python 3, SSH, rsync, and `runpodctl`. `.env.runpod`, local launcher state, and
+all downloaded artifacts are ignored by Git. On failure, the Pod is stopped and
+retained for diagnosis by default; the independent termination deadline still
+prevents indefinite storage retention. All behavior is configurable in the
+commented `.env.runpod.example` template.
+
 ## Smoke before quality
 
 For a new GPU type or modified dependency pin, first verify the same complete

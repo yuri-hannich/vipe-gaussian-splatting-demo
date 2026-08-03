@@ -5,7 +5,9 @@
 .env
 .env.*
 !.env.example
+!.env.runpod.example
 /.secrets/
+/.runpod/
 .venv/
 venv/
 /.cache/

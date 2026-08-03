@@ -60,6 +60,29 @@ This is still the same dataset input. The archive path only changes the
 transport; the checked-in Drive inventory and source-sequence validator enforce
 the same 126-file contract.
 
+## Local lifecycle automation
+
+`scripts/runpod_pipeline.sh` offers an optional local control plane around the
+same provider-independent pipeline. After copying `.env.runpod.example` to the
+ignored `.env.runpod`, run:
+
+```bash
+make runpod-dry-run
+make runpod
+```
+
+The account API key remains only in the local launcher environment. It is used
+by `runpodctl` to query the balance and create, inspect, stop, or delete the Pod;
+it is never added to Pod environment variables or SSH commands. The Pod clones
+the exact pushed Git revision, so a cloud run cannot silently include local
+uncommitted files.
+
+The launcher places both a stop deadline and a later termination deadline on
+the resource. An unsuccessful run stops and retains the Pod for diagnosis by
+default. A successful run downloads and independently verifies the reported
+artifacts before deleting the Pod and its attached Pod volume. The ignored
+`.runpod/active.env` records the Pod ID when manual recovery is required.
+
 ## Cost safety
 
 GPU prices and availability change. Query the live catalog immediately before
