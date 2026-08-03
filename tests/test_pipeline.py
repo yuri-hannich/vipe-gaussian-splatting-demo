@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import unittest
 
 from vipe_demo.config import load_profile
@@ -7,6 +8,19 @@ from vipe_demo.pipeline import ROOT, _fingerprint, build_stages, pipeline_enviro
 
 
 class PipelineTests(unittest.TestCase):
+    def _common_shell(self, expression: str) -> str:
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f'source "{ROOT}/scripts/lib/common.sh"; {expression}',
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
     def test_quality_profile_has_complete_stage_contract(self) -> None:
         profile, profiles, versions = load_profile(ROOT, "quality")
         stages = build_stages(profile, profiles)
@@ -48,6 +62,17 @@ class PipelineTests(unittest.TestCase):
         setup_before = _fingerprint(stages["setup_splatfacto"], dependencies, baseline)
         setup_after = _fingerprint(stages["setup_splatfacto"], dependencies, changed)
         self.assertNotEqual(setup_before, setup_after)
+
+    def test_resume_counts_steps_toward_total_target(self) -> None:
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 20000"), "10000")
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 30000"), "0")
+        self.assertEqual(self._common_shell("remaining_training_steps 30000 32000"), "0")
+
+    def test_checkpoint_step_parser_handles_zero_padding(self) -> None:
+        self.assertEqual(
+            self._common_shell("checkpoint_step_from_path /tmp/step-000020000.ckpt"),
+            "20000",
+        )
 
 
 if __name__ == "__main__":

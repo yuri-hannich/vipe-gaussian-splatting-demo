@@ -22,22 +22,41 @@ case "${ACTION}" in
   train)
     [[ -f "${COLMAP_ROOT}/validation.json" ]] || fail "COLMAP geometry has not passed validation"
     mkdir -p "${NS_OUTPUT_ROOT}"
+    RUN_STEPS="${TRAIN_STEPS}"
+    LATEST_CHECKPOINT=""
+    for checkpoint in "${NS_MODELS}"/step-*.ckpt; do
+      [[ -e "${checkpoint}" ]] || continue
+      if [[ -z "${LATEST_CHECKPOINT}" || "${checkpoint}" > "${LATEST_CHECKPOINT}" ]]; then
+        LATEST_CHECKPOINT="${checkpoint}"
+      fi
+    done
+
+    if [[ -n "${LATEST_CHECKPOINT}" ]]; then
+      CHECKPOINT_STEP="$(checkpoint_step_from_path "${LATEST_CHECKPOINT}")" \
+        || fail "Cannot parse checkpoint step: ${LATEST_CHECKPOINT}"
+      RUN_STEPS="$(remaining_training_steps "${TRAIN_STEPS}" "${CHECKPOINT_STEP}")"
+      if (( RUN_STEPS == 0 )); then
+        log "Splatfacto target ${TRAIN_STEPS} already reached by checkpoint step ${CHECKPOINT_STEP}"
+        exit 0
+      fi
+      log "Resuming Splatfacto from step ${CHECKPOINT_STEP}; ${RUN_STEPS} steps remain to target ${TRAIN_STEPS}"
+    fi
+
     SAVE_EVERY=2000
-    if (( TRAIN_STEPS < SAVE_EVERY )); then
-      SAVE_EVERY="${TRAIN_STEPS}"
+    if (( RUN_STEPS < SAVE_EVERY )); then
+      SAVE_EVERY="${RUN_STEPS}"
     fi
     TRAIN_ARGS=(
       ns-train splatfacto
       --output-dir "${NS_OUTPUT_ROOT}"
       --experiment-name "${SEQUENCE_NAME}"
       --timestamp "${PROFILE}"
-      --max-num-iterations "${TRAIN_STEPS}"
+      --max-num-iterations "${RUN_STEPS}"
       --steps-per-save "${SAVE_EVERY}"
-      --steps-per-eval-all-images "${TRAIN_STEPS}"
+      --steps-per-eval-all-images "${RUN_STEPS}"
       --vis tensorboard
     )
-    if compgen -G "${NS_MODELS}/step-*.ckpt" >/dev/null; then
-      log "Resuming Splatfacto from the latest checkpoint in ${NS_MODELS}"
+    if [[ -n "${LATEST_CHECKPOINT}" ]]; then
       TRAIN_ARGS+=(--load-dir "${NS_MODELS}")
     fi
     TRAIN_ARGS+=(
@@ -49,7 +68,7 @@ case "${ACTION}" in
       --eval-mode interval
       --eval-interval "${EVAL_INTERVAL}"
     )
-    log "Training Splatfacto for ${TRAIN_STEPS} total steps"
+    log "Training Splatfacto for ${RUN_STEPS} invocation steps (target: ${TRAIN_STEPS} total)"
     run_ns "${TRAIN_ARGS[@]}"
     ;;
   evaluate)

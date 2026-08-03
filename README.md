@@ -21,7 +21,8 @@ pin-verified external dependencies.
 | End-to-end demo | `artifacts/quality/demo.mp4` and checksum-backed run report |
 
 The source images and generated artifacts are intentionally excluded from Git.
-Final large artifacts are published separately as GitHub Release assets.
+Final large artifacts are published separately in the
+[quality-v1 GitHub Release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1).
 
 ## One-command reproduction
 
@@ -113,6 +114,37 @@ registered, the COLMAP export contained 54,599 points, and the exported PLY
 contained 320,109 finite Gaussians. Smoke metrics are an integration signal,
 not the final quality claim.
 
+## Validated quality result
+
+The full 126-frame profile was validated on an RTX 4090. The downloadable
+[release artifacts](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1)
+are the exact outputs summarized by the included checksum-backed report.
+
+| Result | Value |
+| --- | ---: |
+| Registered cameras | 126 / 126 |
+| ViPE/COLMAP points | 319,311 |
+| Evaluated checkpoint | 32,000 steps |
+| Exported finite Gaussians | 5,943,740 |
+| PSNR | 16.795 |
+| SSIM | 0.3859 |
+| LPIPS | 0.4178 |
+| Demo | 218 frames, 1600x1200 H.264, 9.17 s |
+
+The configured quality target is 30,000 total steps. This recovery run was
+interrupted near the target and its latest save-boundary checkpoint reached
+32,000 before evaluation. The resume implementation now subtracts the loaded
+checkpoint step from the total target and treats a checkpoint at or above the
+target as complete, preventing a resumed invocation from training another full
+30,000 steps.
+
+Visual inspection shows stable camera motion, coherent building/terrain
+geometry, and strong view agreement. Thin leafless branches and vegetation
+remain the main source of blur and floaters, as expected from the scene content
+and incomplete view coverage. Metrics use Nerfstudio's interval holdout split
+and should not be compared directly with results using different splits,
+resolutions, or preprocessing.
+
 ## Pipeline
 
 ```text
@@ -136,7 +168,8 @@ checksum-backed run-report.json
 
 Every stage writes a log and a fingerprinted completion record. Re-running the
 same command resumes outputs only when its command, relevant configuration,
-inputs, dependencies, and recorded output signatures still match.
+inputs, dependencies, and recorded output signatures still match. Splatfacto
+resume steps are counted toward the configured total training target.
 
 Inspect the resolved stage plan without executing it:
 

@@ -73,6 +73,12 @@ does not need to assemble them manually. Completed stages are resumable and tied
 to input/configuration fingerprints so an interrupted RunPod session does not
 silently reuse stale artifacts.
 
+For Splatfacto specifically, the profile's step count is a total target. When a
+checkpoint exists, the wrapper parses its saved step and runs only the positive
+remainder; a checkpoint at or beyond the target makes the train stage a no-op.
+This is necessary because Nerfstudio interprets `--max-num-iterations` as work
+for the resumed invocation rather than an absolute final step.
+
 ### Assignment deliverables
 
 The repository itself is one deliverable and contains the command, source,

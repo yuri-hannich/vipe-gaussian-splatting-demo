@@ -144,3 +144,23 @@ Measured stage timings are recorded in the generated report. Setup takes longer
 on a cold volume because the two intentionally isolated PyTorch stacks and the
 gsplat CUDA extension must be installed once; subsequent stage execution is
 resumable and reuses the persistent caches.
+
+## Quality validation result
+
+The complete 126-frame profile was also validated on an RTX 4090:
+
+- ViPE registered all 126 frames and the COLMAP gate accepted 319,311 points;
+- the evaluated recovery checkpoint produced PSNR 16.795, SSIM 0.3859, and
+  LPIPS 0.4178 on the interval holdout split;
+- the exported 1.47 GB PLY contains 5,943,740 finite Gaussians; and
+- the demo contains 218 H.264 frames at 1600x1200 over 9.17 seconds.
+
+The quality profile targets 30,000 total Splatfacto steps. The validated run
+was interrupted and reached a 32,000-step save boundary during recovery before
+evaluation. The current train wrapper computes `target - checkpoint_step` on
+resume and exits successfully when the latest checkpoint is already at or past
+the target. This avoids interpreting `--max-num-iterations` as another complete
+training budget after `--load-dir`.
+
+The exact PLY, video, metrics, and report are published in the
+[quality-v1 release](https://github.com/yuri-hannich/vipe-gaussian-splatting-demo/releases/tag/quality-v1).

@@ -78,3 +78,22 @@ ensure_checkout() {
   fi
   [[ "${actual}" == "${commit}" ]] || fail "Revision verification failed in ${destination}"
 }
+
+checkpoint_step_from_path() {
+  local filename="${1##*/}"
+  [[ "${filename}" =~ ^step-([0-9]+)\.ckpt$ ]] || return 1
+  printf '%d\n' "$((10#${BASH_REMATCH[1]}))"
+}
+
+remaining_training_steps() {
+  local target_steps="$1"
+  local checkpoint_steps="$2"
+  [[ "${target_steps}" =~ ^[0-9]+$ ]] || fail "Invalid target step count: ${target_steps}"
+  [[ "${checkpoint_steps}" =~ ^[0-9]+$ ]] || fail "Invalid checkpoint step count: ${checkpoint_steps}"
+
+  if (( checkpoint_steps >= target_steps )); then
+    printf '0\n'
+  else
+    printf '%d\n' "$((target_steps - checkpoint_steps))"
+  fi
+}
