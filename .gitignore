@@ -1,0 +1,40 @@
+# Codex working memory (local-only, never publish)
+/.codex-memory/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+/.secrets/
+.venv/
+venv/
+/.cache/
+
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Input data and generated artifacts
+/data/raw/
+/data/downloads/
+/data/interim/
+/data/manifests/
+/vipe_results/
+/outputs/
+/artifacts/
+/runs/
+/checkpoints/
+/models/
+
+# Large media generated during experiments
+*.mp4
+*.mov
+*.avi
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
