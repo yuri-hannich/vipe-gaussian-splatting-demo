@@ -32,7 +32,7 @@ RunPod Pod with:
 - NVIDIA RTX 4090 or another CUDA GPU with at least 24 GB VRAM;
 - `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`;
 - 20 GB container disk;
-- at least 50 GB mounted at `/workspace`; and
+- at least 80 GB mounted at `/workspace` for cold dependency extraction; and
 - public SSH enabled.
 
 Clone the repository under the mounted volume and run:

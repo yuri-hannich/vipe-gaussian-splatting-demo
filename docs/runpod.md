@@ -19,7 +19,8 @@ Validated smoke configuration and recommended minimums:
 
 - one NVIDIA GPU with 24 GB VRAM;
 - 20 GB container disk;
-- 50 GB persistent Pod volume mounted at `/workspace`;
+- 80 GB persistent Pod volume mounted at `/workspace` (50 GB can pass after
+  cache reuse but is not reliable during peak cold uv extraction);
 - public SSH enabled; and
 - Secure Cloud for the validated configuration (Community Cloud is also viable
   when a healthy 24 GB GPU is available).
