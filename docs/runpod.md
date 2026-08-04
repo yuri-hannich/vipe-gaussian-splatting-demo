@@ -92,6 +92,10 @@ artifacts before retrying deletion and confirming that the Pod no longer
 exists. The ignored
 `.runpod/active.env` records the Pod ID when manual recovery is required.
 
+Large PLY/video transfers deliberately disable rsync compression, retain
+partial files, and retry transient SSH/transport failures. The final report
+SHA-256 and structural validators remain authoritative after every retry.
+
 ## Cost safety
 
 GPU prices and availability change. Query the live catalog immediately before

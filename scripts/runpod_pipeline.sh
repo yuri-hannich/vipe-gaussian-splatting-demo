@@ -44,8 +44,9 @@ RUNPOD_KEEP_POD="${RUNPOD_KEEP_POD:-false}"
 RUNPOD_DELETE_ON_FAILURE="${RUNPOD_DELETE_ON_FAILURE:-false}"
 RUNPOD_DRY_RUN="${RUNPOD_DRY_RUN:-false}"
 RUNPOD_POLL_SECONDS="${RUNPOD_POLL_SECONDS:-30}"
+RUNPOD_TRANSFER_RETRIES="${RUNPOD_TRANSFER_RETRIES:-5}"
 
-for value in RUNPOD_CONTAINER_DISK_GB RUNPOD_VOLUME_GB RUNPOD_MAX_HOURS RUNPOD_TERMINATE_AFTER_HOURS RUNPOD_POLL_SECONDS; do
+for value in RUNPOD_CONTAINER_DISK_GB RUNPOD_VOLUME_GB RUNPOD_MAX_HOURS RUNPOD_TERMINATE_AFTER_HOURS RUNPOD_POLL_SECONDS RUNPOD_TRANSFER_RETRIES; do
   [[ "${!value}" =~ ^[1-9][0-9]*$ ]] || fail "${value} must be a positive integer"
 done
 (( RUNPOD_TERMINATE_AFTER_HOURS > RUNPOD_MAX_HOURS )) \
@@ -224,6 +225,22 @@ ssh "${SSH_ARGS[@]}" "root@${SSH_IP}" \
 LOCAL_LOG_DIR="${PROJECT_ROOT}/artifacts/runpod"
 mkdir -p "${LOCAL_LOG_DIR}"
 RSYNC_SHELL="ssh -i ${SSH_KEY} -p ${SSH_PORT} -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+
+rsync_retry() {
+  local source="$1"
+  local destination="$2"
+  for attempt in $(seq 1 "${RUNPOD_TRANSFER_RETRIES}"); do
+    if rsync -a --partial --timeout=120 --no-owner --no-group -e "${RSYNC_SHELL}" \
+      "${source}" "${destination}"; then
+      return 0
+    fi
+    log "Artifact transfer attempt ${attempt}/${RUNPOD_TRANSFER_RETRIES} failed; retrying without compression"
+    (( attempt < RUNPOD_TRANSFER_RETRIES )) || break
+    sleep $((attempt * 15))
+  done
+  return 1
+}
+
 log "Starting the documented pipeline as a reconnectable remote job"
 ssh "${SSH_ARGS[@]}" "root@${SSH_IP}" \
   "mkdir -p ${QUOTED_JOB_DIR}; nohup bash ${QUOTED_ROOT}/scripts/run_remote_pipeline.sh ${QUOTED_ROOT} ${QUOTED_PROFILE} ${QUOTED_JOB_DIR} > ${QUOTED_JOB_DIR}/pipeline.log 2>&1 < /dev/null & printf '%s\\n' \$! > ${QUOTED_JOB_DIR}/pid"
@@ -249,7 +266,7 @@ for poll in $(seq 1 "${MAX_POLLS}"); do
   sleep "${RUNPOD_POLL_SECONDS}"
 done
 
-rsync -az --no-owner --no-group -e "${RSYNC_SHELL}" \
+rsync -a --partial --timeout=120 --no-owner --no-group -e "${RSYNC_SHELL}" \
   "root@${SSH_IP}:${REMOTE_JOB_DIR}/pipeline.log" \
   "${LOCAL_LOG_DIR}/${POD_ID}.log" || true
 [[ -n "${REMOTE_EXIT_CODE}" ]] || fail "Remote pipeline did not publish an exit code before the compute deadline"
@@ -258,13 +275,13 @@ rsync -az --no-owner --no-group -e "${RSYNC_SHELL}" \
 
 mkdir -p "${PROJECT_ROOT}/artifacts/${PROFILE}" "${PROJECT_ROOT}/runs/${PROFILE}"
 log "Downloading deliverables and diagnostic records"
-rsync -az --no-owner --no-group -e "${RSYNC_SHELL}" \
+rsync_retry \
   "root@${SSH_IP}:${REMOTE_ROOT}/artifacts/${PROFILE}/" \
   "${PROJECT_ROOT}/artifacts/${PROFILE}/"
-rsync -az --no-owner --no-group -e "${RSYNC_SHELL}" \
+rsync_retry \
   "root@${SSH_IP}:${REMOTE_ROOT}/runs/${PROFILE}/logs/" \
   "${PROJECT_ROOT}/runs/${PROFILE}/logs/"
-rsync -az --no-owner --no-group -e "${RSYNC_SHELL}" \
+rsync_retry \
   "root@${SSH_IP}:${REMOTE_ROOT}/runs/${PROFILE}/.pipeline/" \
   "${PROJECT_ROOT}/runs/${PROFILE}/.pipeline/"
 
